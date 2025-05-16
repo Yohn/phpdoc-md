@@ -1,11 +1,10 @@
-<?php namespace Clean\PhpDocMd\Markdown\Stash;
+<?php
+namespace Clean\PhpDocMd\Markdown\Stash;
 
 use Clean\PhpDocMd\Markdown\ClassInfo as AbstractClassInfo;
 
-class ClassInfo extends AbstractClassInfo
-{
-    public function getFormatName()
-    {
-        return 'stash';
-    }
+class ClassInfo extends AbstractClassInfo {
+	public function getFormatName() {
+		return 'stash';
+	}
 }

@@ -1,150 +1,206 @@
-<?php namespace Clean\PhpDocMd;
+<?php
+namespace Clean\PhpDocMd;
 
 use phpDocumentor\Reflection\DocBlockFactory;
 use phpDocumentor\Reflection\DocBlock\Tags\InvalidTag;
 use ReflectionClass;
 use ReflectionMethod;
 
-class ClassParser
-{
-    /**
-     * @var ReflectionClass
-     */
-    private $reflection;
-    private $docBlockFactory;
+/**
+ * Parses class and method docblocks using phpDocumentor reflection.
+ */
+class ClassParser {
+	/**
+	 * @var ReflectionClass Class reflection instance.
+	 */
+	private ReflectionClass $reflection;
 
-    public function __construct(ReflectionClass $class)
-    {
-        $this->reflection = $class;
-        $this->docBlockFactory = DocBlockFactory::createInstance();
-    }
+	/**
+	 * @var DocBlockFactory Factory for creating DocBlocks.
+	 */
+	private DocBlockFactory $docBlockFactory;
 
-    public function getClassDescription()
-    {
-        $docblock = $this->docBlockFactory->create($this->reflection->getDocComment() ?: '/** */');
-        return (object)[
-            'short' => (string)$docblock->getSummary(),
-            'long' => (string)$docblock->getDescription(),
-        ];
-    }
+	/**
+	 * @param ReflectionClass $class Target class for parsing.
+	 */
+	public function __construct(ReflectionClass $class) {
+		$this->reflection = $class;
+		$this->docBlockFactory = DocBlockFactory::createInstance();
+	}
 
-    public function getParentClassName()
-    {
-        return ($p = $this->reflection->getParentClass()) ? $p->getName() : null;
-    }
+	/**
+	 * Returns the class short and long description.
+	 *
+	 * @return object
+	 */
+	public function getClassDescription(): object {
+		$docblock = $this->docBlockFactory->create($this->reflection->getDocComment() ?: '/** */');
+		return (object) [
+			'short' => (string) $docblock->getSummary(),
+			'long'  => (string) $docblock->getDescription(),
+		];
+	}
 
-    public function getInterfaces()
-    {
-        return $this->reflection->getInterfaceNames();
-    }
+	/**
+	 * Returns parent class name or null.
+	 *
+	 * @return string|null
+	 */
+	public function getParentClassName(): ?string {
+		return ($p = $this->reflection->getParentClass()) ? $p->getName() : null;
+	}
 
-    public function getMethodsDetails()
-    {
-        $methods = [];
-        $parentClassMethods = $this->getInheritedMethods();
+	/**
+	 * Returns implemented interface names.
+	 *
+	 * @return array
+	 */
+	public function getInterfaces(): array {
+		return $this->reflection->getInterfaceNames();
+	}
 
-        foreach ($this->reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-            if (isset($parentClassMethods[$method->getName()])) {
-                continue;
-            }
-            $methods[$method->getName()] = $this->getMethodDetails($method);
-        }
+	/**
+	 * Returns public method details excluding inherited.
+	 *
+	 * @return array
+	 */
+	public function getMethodsDetails(): array {
+		$methods = [];
+		$parentClassMethods = $this->getInheritedMethods();
 
-        return $methods;
-    }
+		foreach ($this->reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+			if (isset($parentClassMethods[$method->getName()])) {
+				continue;
+			}
+			$methods[$method->getName()] = $this->getMethodDetails($method);
+		}
 
-    private function getMethodDetails($method)
-    {
-        $docblock = $this->docBlockFactory->create($method->getDocComment() ?: '/** */');
+		return $methods;
+	}
 
-        $data = [
-            'shortDescription' => null,
-            'longDescription' => null,
-            'argumentsList' => [],
-            'argumentsDescription' => null,
-            'returnValue' => null,
-            'throwsExceptions' => null,
-            'visibility' => null,
-        ];
+	/**
+	 * Parses method docblock for descriptions, params, return and throws.
+	 *
+	 * @param ReflectionMethod $method
+	 * @return object
+	 */
+	private function getMethodDetails(ReflectionMethod $method): object {
+		$docblock = $this->docBlockFactory->create($method->getDocComment() ?: '/** */');
 
-        if ($docblock->getSummary()) {
-            $data['shortDescription'] = $docblock->getSummary();
-            $data['longDescription'] = $docblock->getDescription();
-            $data['argumentsList'] = $this->retrieveParams($docblock->getTagsByName('param'));
-            $data['argumentsDescription'] = $this->retrieveParamsDescription($docblock->getTagsByName('param'));
-            $data['returnValue'] = $this->retrieveTagData($docblock->getTagsByName('return'));
-            $data['throwsExceptions'] = $this->retrieveTagData($docblock->getTagsByName('throws'));
-            $data['visibility'] =  join(
-                    '',
-                    [
-                        $method->isFinal() ? 'final ' : '',
-                        'public',
-                        $method->isStatic() ? ' static' : '',
-                    ]
-                );
-        } else {
-            $className = sprintf("%s::%s", $method->class, $method->name);
-            $atlasdoc = new \Clean\PhpAtlas\ClassMethod($className);
-            $data['shortDescription'] = $atlasdoc->getMethodShortDescription();
-            $data['doclink'] = $atlasdoc->getMethodPHPDocLink();
-        }
-        return (object)$data;
-    }
+		$data = [
+			'shortDescription'     => null,
+			'longDescription'      => null,
+			'argumentsList'        => [],
+			'argumentsDescription' => null,
+			'returnValue'          => null,
+			'throwsExceptions'     => null,
+			'visibility'           => null,
+		];
 
-    public function getInheritedMethods()
-    {
-        $methods = [];
-        $parentClass = $this->reflection->getParentClass();
-        if ($parentClass) {
-            foreach ($parentClass->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-                $methods[$method->getName()] = $this->getMethodDetails($method);
-            }
-        }
-        ksort($methods);
-        return $methods;
-    }
+		if ($docblock->getSummary()) {
+			$data['shortDescription'] = $docblock->getSummary();
+			$data['longDescription'] = $docblock->getDescription();
+			$data['argumentsList'] = $this->retrieveParams($docblock->getTagsByName('param'));
+			$data['argumentsDescription'] = $this->retrieveParamsDescription($docblock->getTagsByName('param'));
+			$data['returnValue'] = $this->retrieveTagData($docblock->getTagsByName('return'));
+			$data['throwsExceptions'] = $this->retrieveTagData($docblock->getTagsByName('throws'));
+			$data['visibility'] = join(
+				'',
+				[
+					$method->isFinal() ? 'final ' : '',
+					'public',
+					$method->isStatic() ? ' static' : '',
+				]
+			);
+		} else {
+			$className = sprintf("%s::%s", $method->class, $method->name);
+			$atlasdoc = new \Clean\PhpAtlas\ClassMethod($className);
+			$data['shortDescription'] = $atlasdoc->getMethodShortDescription();
+			$data['doclink'] = $atlasdoc->getMethodPHPDocLink();
+		}
 
-    private function retrieveTagData(array $params)
-    {
-        $data = [];
-        foreach ($params as $param) {
-            $data[] = (object)[
-                'desc' => $param->getDescription(),
-                'type' => $param->getType(),
-            ];
-        }
-        return $data;
-    }
+		return (object) $data;
+	}
 
-    private function retrieveParams(array $params)
-    {
-        $data = [];
-        foreach ($params as $param) {
-            if ($param instanceof InvalidTag) {
-                continue;
-            }
-            $data[] = sprintf("%s $%s", $param->getType(), $param->getVariableName());
-        }
-        return $data;
-    }
+	/**
+	 * Returns inherited public methods from parent class.
+	 *
+	 * @return array
+	 */
+	public function getInheritedMethods(): array {
+		$methods = [];
+		$parentClass = $this->reflection->getParentClass();
+		if ($parentClass) {
+			foreach ($parentClass->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+				$methods[$method->getName()] = $this->getMethodDetails($method);
+			}
+		}
+		ksort($methods);
+		return $methods;
+	}
 
-    private function retrieveParamsDescription(array $params)
-    {
-        $data = [];
-        foreach ($params as $param) {
-            if ($param instanceof InvalidTag) {
-                continue;
-            }
-            $data[] = (object)[
-                'name' => '$' . $param->getVariableName(),
-                'desc' => $param->getDescription(),
-                'type' => $param->getType(),
-            ];
-        }
-        return $data;
-    }
+	/**
+	 * Extracts tag description and type from @param, @return, @throws.
+	 *
+	 * @param array $params
+	 * @return array
+	 */
+	private function retrieveTagData(array $params): array {
+		$data = [];
+		foreach ($params as $param) {
+			$data[] = (object) [
+				'desc' => $param->getDescription(),
+				'type' => $param->getType(),
+			];
+		}
+		return $data;
+	}
 
-    private function getPHPDocLink($method) {
-        return strtolower(sprintf('https://secure.php.net/manual/en/%s.%s.php', $method->class, $method->name));
-    }
+	/**
+	 * Returns simplified param list from @param tags.
+	 *
+	 * @param array $params
+	 * @return array
+	 */
+	private function retrieveParams(array $params): array {
+		$data = [];
+		foreach ($params as $param) {
+			if ($param instanceof InvalidTag) {
+				continue;
+			}
+			$data[] = sprintf("%s $%s", $param->getType(), $param->getVariableName());
+		}
+		return $data;
+	}
+
+	/**
+	 * Returns param details with name, type, and description.
+	 *
+	 * @param array $params
+	 * @return array
+	 */
+	private function retrieveParamsDescription(array $params): array {
+		$data = [];
+		foreach ($params as $param) {
+			if ($param instanceof InvalidTag) {
+				continue;
+			}
+			$data[] = (object) [
+				'name' => '$' . $param->getVariableName(),
+				'desc' => $param->getDescription(),
+				'type' => $param->getType(),
+			];
+		}
+		return $data;
+	}
+
+	/**
+	 * Returns manual PHP doc link for the method.
+	 *
+	 * @param ReflectionMethod $method
+	 * @return string
+	 */
+	private function getPHPDocLink(ReflectionMethod $method): string {
+		return strtolower(sprintf('https://secure.php.net/manual/en/%s.%s.php', $method->class, $method->name));
+	}
 }
